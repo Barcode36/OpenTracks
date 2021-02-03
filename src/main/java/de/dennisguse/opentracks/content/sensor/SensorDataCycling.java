@@ -41,7 +41,7 @@ public final class SensorDataCycling {
         /**
          * Workaround for Wahoo CADENCE: provides speed instead of cadence
          */
-        public Cadence(@NonNull SensorDataCycling.Speed speed) {
+        public Cadence(@NonNull DistanceSpeed speed) {
             this(speed.getSensorAddress(), speed.getSensorName(), speed.wheelRevolutionsCount, speed.wheelRevolutionsTime);
         }
 
@@ -90,18 +90,18 @@ public final class SensorDataCycling {
         }
     }
 
-    public static class Speed extends SensorData<Float> {
+    public static class DistanceSpeed extends SensorData<DistanceSpeed.Data> {
 
         private final Integer wheelRevolutionsCount; // UINT16
         private final Integer wheelRevolutionsTime; // UINT16; 1/1024s
 
-        public Speed(String sensorAddress) {
+        public DistanceSpeed(String sensorAddress) {
             super(sensorAddress);
             this.wheelRevolutionsCount = null;
             this.wheelRevolutionsTime = null;
         }
 
-        public Speed(String sensorAddress, String sensorName, int wheelRevolutionsCount, int wheelRevolutionsTime) {
+        public DistanceSpeed(String sensorAddress, String sensorName, int wheelRevolutionsCount, int wheelRevolutionsTime) {
             super(sensorAddress, sensorName);
             this.wheelRevolutionsCount = wheelRevolutionsCount;
             this.wheelRevolutionsTime = wheelRevolutionsTime;
@@ -119,7 +119,7 @@ public final class SensorDataCycling {
             return wheelRevolutionsTime;
         }
 
-        public void compute(Speed previous, int wheel_circumference_mm) {
+        public void compute(DistanceSpeed previous, int wheel_circumference_mm) {
             if (hasData() && previous != null && previous.hasData()) {
                 float timeDiff_ms = UintUtils.diff(wheelRevolutionsTime, previous.wheelRevolutionsTime, UintUtils.UINT16_MAX) / 1024f * UnitConversions.S_TO_MS;
                 if (timeDiff_ms <= 0) {
@@ -128,9 +128,20 @@ public final class SensorDataCycling {
                 } else {
                     long wheelDiff = UintUtils.diff(wheelRevolutionsCount, previous.wheelRevolutionsCount, UintUtils.UINT16_MAX);
                     double timeDiff_s = timeDiff_ms * UnitConversions.MS_TO_S;
-                    value = (float) (wheelDiff * wheel_circumference_mm * UnitConversions.MM_TO_M / timeDiff_s);
+                    float distance_m = (float) (wheelDiff * wheel_circumference_mm * UnitConversions.MM_TO_M);
+                    float distance_overall_m = distance_m;
+                    if (previous.hasValue()) {
+                        distance_overall_m += previous.getValue().distance_overall_m;
+                    }
+                    float speed_mps = (float) (distance_m / timeDiff_s);
+                    value = new Data(distance_m, distance_overall_m, speed_mps);
                 }
             }
+        }
+
+        @Override
+        public void reset() {
+            value = new Data(value.distance_m, 0, value.speed_mps);
         }
 
         @NonNull
@@ -141,29 +152,41 @@ public final class SensorDataCycling {
 
         @Override
         public boolean equals(@Nullable Object obj) {
-            if (!(obj instanceof Speed)) return false;
+            if (!(obj instanceof DistanceSpeed)) return false;
 
-            Speed comp = (Speed) obj;
+            DistanceSpeed comp = (DistanceSpeed) obj;
             if (hasData() && comp.hasData() == hasData()) {
                 return getWheelRevolutionsCount() == comp.getWheelRevolutionsCount() && getWheelRevolutionsTime() == comp.getWheelRevolutionsTime();
             } else {
                 return false;
             }
         }
+
+        public static class Data {
+            public final float distance_m;
+            public final float distance_overall_m;
+            public final float speed_mps;
+
+            private Data(float distance_m, float distance_overall_m, float speed_mps) {
+                this.distance_m = distance_m;
+                this.distance_overall_m = distance_overall_m;
+                this.speed_mps = speed_mps;
+            }
+        }
     }
 
-    public static class CadenceAndSpeed extends SensorData<Pair<Cadence, Speed>> {
+    public static class CadenceAndSpeed extends SensorData<Pair<Cadence, DistanceSpeed>> {
 
-        public CadenceAndSpeed(String sensorAddress, String sensorName, @NonNull Cadence cadence, @NonNull Speed speed) {
+        public CadenceAndSpeed(String sensorAddress, String sensorName, @Nullable Cadence cadence, @Nullable DistanceSpeed distanceSpeed) {
             super(sensorAddress, sensorName);
-            this.value = new Pair<>(cadence, speed);
+            this.value = new Pair<>(cadence, distanceSpeed);
         }
 
         public Cadence getCadence() {
             return this.value != null ? this.value.first : null;
         }
 
-        public Speed getSpeed() {
+        public DistanceSpeed getDistanceSpeed() {
             return this.value != null ? this.value.second : null;
         }
     }

@@ -123,7 +123,7 @@ public class TrackStatisticsUpdater {
         if (trackPoint.isSegmentStart() || trackPoint.isSegmentEnd()) {
             if (trackPoint.isSegmentEnd()) {
                 if (lastTrackPoint != null && lastMovingTrackPoint != null && lastTrackPoint != lastMovingTrackPoint) {
-                    currentSegment.addTotalDistance(lastMovingTrackPoint.distanceTo(lastTrackPoint));
+                    currentSegment.addTotalDistance(lastMovingTrackPoint.distanceToPrevious(lastTrackPoint));
                 }
             }
             trackStatistics.merge(currentSegment);
@@ -159,7 +159,7 @@ public class TrackStatisticsUpdater {
             return;
         }
 
-        double movingDistance = lastMovingTrackPoint.distanceTo(trackPoint);
+        double movingDistance = trackPoint.hasSensorDistance() ? trackPoint.getSensorDistance() : lastMovingTrackPoint.distanceToPrevious(trackPoint);
         if (movingDistance < minRecordingDistance && !trackPoint.isMoving()) {
             speedBuffer_ms.reset();
             lastTrackPoint = trackPoint;
